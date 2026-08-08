@@ -1,0 +1,24 @@
+# Optional overrides for logical routes (no model IDs here).
+
+version: 1
+
+routes:
+  scout:
+    purpose: economy
+    needs: [read, search]
+  produce:
+    purpose: balanced
+    needs: [write]
+  implement:
+    purpose: balanced
+    needs: [write, test, worktree]
+  verify:
+    purpose: economy
+    needs: [read, test]
+  review:
+    purpose: quality
+    needs: [read]
+    prefer_different_family_from: produce
+  advise:
+    purpose: quality
+    needs: [read, write]
