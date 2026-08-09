@@ -25,8 +25,11 @@ fusion-style run (multi-hop produce/implement/review with visible routing).
 
 ```bash
 bash scripts/fusion_init.sh          # creates $HERMES_HOME/fusion/
-bash scripts/probe_backends.sh       # what CLIs exist
-$EDITOR "$HERMES_HOME/fusion/models.yaml"   # bind real model IDs + effort
+bash scripts/probe_backends.sh       # shell-visible CLIs (delegate_task/a2a = unknown)
+chmod +x scripts/*.sh scripts/fusion_log.py   # if your install dropped +x
+$EDITOR "$HERMES_HOME/fusion/models.yaml"   # replace REPLACE_ME + set updated_at
+python3 scripts/fusion_log.py append --help
+bash scripts/smoke_test.sh           # optional local smoke
 ```
 
 User-owned config lives under `$HERMES_HOME/fusion/` (not in this repo):
@@ -66,6 +69,8 @@ scripts/
   fusion_log.py
   probe_backends.sh
   worktree_prepare.sh
+  worktree_cleanup.sh
+  smoke_test.sh
 ```
 
 ## Related

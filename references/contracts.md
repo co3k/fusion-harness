@@ -10,8 +10,10 @@
 - model_id: <from models.yaml or unknown>
 - effort: max | xhigh | high | medium | low   # requested; default max
 - backend: delegate_task | codex | claude | acpx | a2a | terminal
-- repo: <absolute path>
-- worktree: <absolute path or branch name>
+- repo: <absolute path to git root>
+- worktree_path: <absolute path to disposable worktree>   # prefer this
+- worktree_branch: <branch name, e.g. fusion/<run_id>>   # prefer this
+- worktree: <deprecated single field — absolute path preferred; do not put branch name here>
 - base_ref: <main or starting sha>
 
 ## Goal

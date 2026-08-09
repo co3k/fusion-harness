@@ -223,7 +223,14 @@ location; do not assume a single user's home layout beyond `$HERMES_HOME`):
 bash scripts/probe_backends.sh
 bash scripts/fusion_init.sh
 python3 scripts/fusion_log.py summary --last 20
+bash scripts/worktree_prepare.sh /abs/repo <run_id>
+bash scripts/worktree_cleanup.sh <run_id>
+bash scripts/smoke_test.sh
 ```
+
+`fusion_log.py append` accepts `--model` or `--model-id` (both written). Omitting
+`--effort` records `effort=unknown` (does not assume max). `model=REPLACE_ME` is
+rejected. `summary` reports `corrupt_lines` for bad JSONL rows.
 
 ## Common Pitfalls
 

@@ -77,6 +77,27 @@ custom_impl:
 
 Non-git work: skip; artifacts under `runs/<run_id>/` only.
 
+Prefer the skill scripts (path convention must match):
+
 ```bash
-git worktree add ../.fusion-wt-<run_id> -b fusion/<run_id>
+# sibling of the repo: $(dirname REPO)/.fusion-wt-$(basename REPO)-<run_id>
+# branch: fusion/<run_id>
+# REPO must be absolute; run_id slug: [A-Za-z0-9._-]+
+bash scripts/worktree_prepare.sh /abs/path/to/repo <run_id>
+# … worker mutates inside worktree …
+bash scripts/worktree_cleanup.sh /abs/path/to/repo <run_id>
+# or, after prepare wrote repo.txt:
+bash scripts/worktree_cleanup.sh <run_id>
+```
+
+Manual equivalent (same naming as `worktree_prepare.sh`):
+
+```bash
+REPO=/abs/path/to/repo
+RUN_ID=my-run
+PARENT="$(dirname "$REPO")"
+BASE="$(basename "$REPO")"
+git -C "$REPO" worktree add \
+  "${PARENT}/.fusion-wt-${BASE}-${RUN_ID}" \
+  -b "fusion/${RUN_ID}"
 ```
