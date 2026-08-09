@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Print which fusion worker backends look available.
+# Print which fusion worker backends look available from the shell.
+# Note: delegate_task / a2a are Hermes runtime toolsets — not fully probeable here.
 set -euo pipefail
 have() { command -v "$1" >/dev/null 2>&1 && echo "yes" || echo "no"; }
 echo "fusion backend probe ($(date -Iseconds 2>/dev/null || date))"
 echo "HERMES_HOME=${HERMES_HOME:-$HOME/.hermes}"
-echo "delegate_task: yes  # Hermes built-in (runtime)"
+# Do NOT hardcode yes — shell cannot verify Hermes delegation toolset.
+echo "delegate_task: unknown  # Hermes built-in when agent session has delegation; not shell-probeable"
 echo "codex:  $(have codex)"
 echo "claude: $(have claude)"
 echo "acpx:   $(have acpx)"
 echo "git:    $(have git)"
-# a2a is a Hermes toolset — cannot know from shell alone
-echo "a2a:    unknown (enable hermes a2a toolset + peers)"
+echo "a2a:    unknown  # enable hermes a2a toolset + peers; not shell-probeable"
 if command -v codex >/dev/null 2>&1; then
   echo "--- codex --version ---"
   codex --version 2>&1 | head -5 || true
