@@ -24,14 +24,34 @@ def history_path() -> Path:
 
 
 def cmd_append(args: argparse.Namespace) -> int:
+    model = args.model or args.model_id or ""
+    if not model:
+        print("error: --model or --model-id is required", file=sys.stderr)
+        return 2
+    if model == "REPLACE_ME":
+        print(
+            "error: model is REPLACE_ME — edit $HERMES_HOME/fusion/models.yaml before logging quality hops",
+            file=sys.stderr,
+        )
+        return 2
+
+    # effort: omit flag → unknown (do not pretend max was used)
+    if args.effort is None:
+        effort = "unknown"
+    else:
+        effort = args.effort
+
+    reason = args.reason if args.reason is not None else ""
+    # keep reason key even when empty so contracts "every hop logs reason" holds
     rec = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "run_id": args.run_id or "",
         "route": args.route,
-        "model": args.model,
-        "effort": args.effort or "",
+        "model": model,
+        "model_id": model,  # contracts.md field; mirror model for compatibility
+        "effort": effort,
         "backend": args.backend,
-        "reason": args.reason or "",
+        "reason": reason,
         "outcome": args.outcome,
         "objective": args.objective or "",
         "task_class": args.task_class or "",
@@ -41,8 +61,13 @@ def cmd_append(args: argparse.Namespace) -> int:
         "duration_s": args.duration_s,
         "notes": args.notes or "",
     }
-    # drop nulls
-    rec = {k: v for k, v in rec.items() if v is not None and v != ""}
+    # drop nulls and empty strings except reason (always kept) and effort (always kept)
+    keep_empty = {"reason", "effort"}
+    rec = {
+        k: v
+        for k, v in rec.items()
+        if v is not None and (v != "" or k in keep_empty)
+    }
     path = history_path()
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -50,9 +75,10 @@ def cmd_append(args: argparse.Namespace) -> int:
     return 0
 
 
-def _read_all() -> list[dict]:
+def _read_all() -> tuple[list[dict], int]:
     path = history_path()
-    rows = []
+    rows: list[dict] = []
+    corrupt = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -60,19 +86,24 @@ def _read_all() -> list[dict]:
         try:
             rows.append(json.loads(line))
         except json.JSONDecodeError:
+            corrupt += 1
             continue
-    return rows
+    return rows, corrupt
 
 
 def cmd_summary(args: argparse.Namespace) -> int:
-    rows = _read_all()
+    rows, corrupt = _read_all()
+    total = len(rows) + corrupt
     if args.last:
         rows = rows[-args.last :]
     by_route: dict[str, Counter] = defaultdict(Counter)
     for r in rows:
         route = r.get("route", "?")
         by_route[route][r.get("outcome", "?")] += 1
-    print(f"history_lines={len(rows)} path={history_path()}")
+    print(
+        f"history_lines={len(rows)} corrupt_lines={corrupt} "
+        f"scanned_nonempty={total} path={history_path()}"
+    )
     for route, ctr in sorted(by_route.items()):
         print(f"  {route}: {dict(ctr)}")
     if args.verbose:
@@ -87,8 +118,22 @@ def main() -> int:
 
     a = sp.add_parser("append", help="append one hop")
     a.add_argument("--route", required=True)
-    a.add_argument("--model", required=True)
-    a.add_argument("--effort", default="max")
+    a.add_argument(
+        "--model",
+        default=None,
+        help="model id (alias of --model-id; required one of them)",
+    )
+    a.add_argument(
+        "--model-id",
+        default=None,
+        dest="model_id",
+        help="model id (contracts.md name; alias of --model)",
+    )
+    a.add_argument(
+        "--effort",
+        default=None,
+        help="requested effort; if omitted logs effort=unknown (does not assume max)",
+    )
     a.add_argument("--backend", required=True)
     a.add_argument("--outcome", required=True)
     a.add_argument("--reason", default="")
@@ -103,7 +148,8 @@ def main() -> int:
     a.set_defaults(func=cmd_append)
 
     s = sp.add_parser("summary", help="summarize history")
-    s.add_argument("--last", type=int, default=50)
+    # Align with SKILL.md example (`--last 20`); pass explicitly for other windows
+    s.add_argument("--last", type=int, default=20)
     s.add_argument("-v", "--verbose", action="store_true")
     s.set_defaults(func=cmd_summary)
 
