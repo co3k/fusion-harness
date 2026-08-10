@@ -1,0 +1,76 @@
+# fusion-harness model+effort binds — USER owned
+# Default effort is max. Lower only on clearly light routes.
+# Bump updated_at when you change binds (YYYY-MM-DD).
+#
+# updated_at: "1970-01-01" is a SENTINEL meaning "never configured".
+# SKILL.md may warn when updated_at is older than 30 days — replace the
+# sentinel with today's date when you first bind real model IDs.
+# Do not leave model: REPLACE_ME for quality runs (fusion_log append rejects it).
+
+updated_at: "1970-01-01"
+
+defaults:
+  backend: delegate_task
+  effort: max
+
+routes:
+  scout:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: delegate_task
+    effort: medium
+
+  produce:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: delegate_task
+    effort: max
+
+  produce_economy:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: delegate_task
+    effort: max
+
+  implement:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: codex
+    effort: max
+
+  implement_economy:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: codex
+    effort: max
+
+  implement_quality:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: codex
+    effort: max
+
+  verify:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: delegate_task
+    effort: medium
+
+  review:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: delegate_task
+    effort: max
+
+  advise:
+    model: "REPLACE_ME"
+    provider: ""
+    backend: delegate_task
+    effort: max
+
+escalate:
+  moa: true
+  external_orchestrator:
+    enabled: false
+    model: ""
+    budget_usd_cap: 5.0
