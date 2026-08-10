@@ -2,6 +2,10 @@
 # Initialize $HERMES_HOME/fusion from skill templates.
 set -euo pipefail
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+if [[ "$HERMES_HOME" != /* ]]; then
+  echo "HERMES_HOME must be an absolute path (got: $HERMES_HOME)" >&2
+  exit 1
+fi
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$HERMES_HOME/fusion"
 TPL_MODELS="$SKILL_DIR/references/templates/models.yaml"
@@ -31,4 +35,5 @@ if [[ ! -f "$DEST/routes.yaml" ]]; then
   echo "created $DEST/routes.yaml"
 fi
 touch "$DEST/history.jsonl"
+chmod 600 "$DEST/history.jsonl" 2>/dev/null || true
 echo "fusion home: $DEST"
