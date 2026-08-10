@@ -24,6 +24,13 @@ def history_path() -> Path:
 
 
 def cmd_append(args: argparse.Namespace) -> int:
+    if (
+        args.model is not None
+        and args.model_id is not None
+        and args.model != args.model_id
+    ):
+        print("error: --model and --model-id must match when both are set", file=sys.stderr)
+        return 2
     model = args.model or args.model_id or ""
     if not model:
         print("error: --model or --model-id is required", file=sys.stderr)
@@ -36,7 +43,7 @@ def cmd_append(args: argparse.Namespace) -> int:
         return 2
 
     # effort: omit flag → unknown (do not pretend max was used)
-    if args.effort is None:
+    if args.effort is None or args.effort == "":
         effort = "unknown"
     else:
         effort = args.effort
@@ -92,18 +99,22 @@ def _read_all() -> tuple[list[dict], int]:
 
 
 def cmd_summary(args: argparse.Namespace) -> int:
-    rows, corrupt = _read_all()
-    total = len(rows) + corrupt
-    if args.last:
-        rows = rows[-args.last :]
+    all_rows, corrupt = _read_all()
+    if args.last < 0:
+        print("error: --last must be zero or a positive integer", file=sys.stderr)
+        return 2
+    rows = all_rows if args.last == 0 else all_rows[-args.last :]
+    total = len(all_rows) + corrupt
     by_route: dict[str, Counter] = defaultdict(Counter)
-    for r in rows:
+    for r in all_rows:
         route = r.get("route", "?")
         by_route[route][r.get("outcome", "?")] += 1
     print(
-        f"history_lines={len(rows)} corrupt_lines={corrupt} "
+        f"history_lines_total={len(all_rows)} window_lines={len(rows)} "
+        f"corrupt_lines={corrupt} "
         f"scanned_nonempty={total} path={history_path()}"
     )
+    print("by_route (full history):")
     for route, ctr in sorted(by_route.items()):
         print(f"  {route}: {dict(ctr)}")
     if args.verbose:
@@ -148,8 +159,8 @@ def main() -> int:
     a.set_defaults(func=cmd_append)
 
     s = sp.add_parser("summary", help="summarize history")
-    # Align with SKILL.md example (`--last 20`); pass explicitly for other windows
-    s.add_argument("--last", type=int, default=20)
+    # Align with SKILL.md example (`--last 20`); zero explicitly means all rows.
+    s.add_argument("--last", type=int, default=20, help="window size; 0 means all rows")
     s.add_argument("-v", "--verbose", action="store_true")
     s.set_defaults(func=cmd_summary)
 
