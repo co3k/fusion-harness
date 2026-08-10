@@ -90,6 +90,20 @@ bash scripts/worktree_cleanup.sh /abs/path/to/repo <run_id>
 bash scripts/worktree_cleanup.sh <run_id>
 ```
 
+After the worker finishes, **export its artifact before cleanup**. For an
+uncommitted implementation, for example:
+
+```bash
+RUN_DIR="$HERMES_HOME/fusion/runs/$RUN_ID"
+WT="$(cat "$RUN_DIR/worktree.txt")"
+git -C "$WT" diff > "$RUN_DIR/final.patch"
+# Or preserve commits with: git -C "$WT" format-patch -o "$RUN_DIR" <base_sha>
+```
+
+Only then run cleanup. Cleanup refuses a worktree with uncommitted changes by
+default; after verifying the exported artifact, set `FUSION_CLEANUP_FORCE=1` if
+forced removal is intended.
+
 Manual equivalent (same naming as `worktree_prepare.sh`):
 
 ```bash

@@ -70,3 +70,11 @@ When promoting route or changing model, new session only. Include:
 - What failed (symptoms, not essays)
 - Current tree state (branch, dirty paths)
 - Single next goal + acceptance
+
+## Worktree run markers
+
+`worktree_prepare.sh` records `worktree.txt`, `repo.txt`, and (when created)
+`branch.txt` under `runs/<run_id>/`, plus `base_sha.txt` containing the main
+repository's starting `HEAD`. Use the preferred `worktree_path` and
+`worktree_branch` fields in handoffs/returns; cleanup requires the worktree and
+repo markers and never invents a branch name when a branch marker is absent.

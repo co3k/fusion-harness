@@ -94,13 +94,13 @@ Examples from public routing policies (verify per install):
 
 ```yaml
 updated_at: "2026-08-08"
-defaults: { backend: delegate_task }
+defaults: { backend: delegate_task, effort: max }
 routes:
-  scout:    { model: grok-4.5, backend: delegate_task }          # or haiku / luna
+  scout:    { model: grok-4.5, backend: delegate_task, effort: medium } # or haiku / luna
   produce:  { model: claude-sonnet-5, backend: claude }
   implement:{ model: gpt-5.6-terra, backend: codex }
   implement_quality: { model: gpt-5.6-sol, backend: codex }
-  verify:   { model: grok-4.5, backend: delegate_task }
+  verify:   { model: grok-4.5, backend: delegate_task, effort: medium }
   review:   { model: claude-sonnet-5, backend: claude }        # after GPT writer
   advise:   { model: claude-sonnet-5, backend: claude }
 escalate:

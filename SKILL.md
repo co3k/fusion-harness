@@ -57,6 +57,8 @@ $HERMES_HOME/fusion/          # default: ~/.hermes/fusion/
 
 If `fusion/` is missing, run `scripts/fusion_init.sh`.
 
+When set for the scripts, `$HERMES_HOME` must be an absolute path.
+
 Do not hardcode machine-specific paths, org names, or private report URLs in
 this skill body.
 
@@ -185,6 +187,9 @@ Probe: `scripts/probe_backends.sh`. Use first backend that satisfies route
 Coding CLIs are **examples**, not requirements. A research-only host may use
 only `delegate_task` + `a2a`.
 
+`delegate_task: unknown` from the backend probe means only that the current
+shell could not prove it; try it if the Hermes session exposes that tool.
+
 If no backend can perform a **required write/produce** hop, stop and tell the
 user — do not silently collapse into unlogged lead-only work while claiming
 fusion.
@@ -230,7 +235,8 @@ bash scripts/smoke_test.sh
 
 `fusion_log.py append` accepts `--model` or `--model-id` (both written). Omitting
 `--effort` records `effort=unknown` (does not assume max). `model=REPLACE_ME` is
-rejected. `summary` reports `corrupt_lines` for bad JSONL rows.
+rejected. `summary` reports `corrupt_lines` for bad JSONL rows. Worktree cleanup
+requires its recorded worktree and repo markers.
 
 ## Common Pitfalls
 
