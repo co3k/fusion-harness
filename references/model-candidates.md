@@ -13,7 +13,7 @@ The skill must not treat these strings as permanently correct.
 | Codex `-m` | `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.5` | bare `gpt-5.6`, `o3` (400 on ChatGPT account) |
 | Claude CLI `--model` | `claude-sonnet-5`, `claude-opus-5`, `claude-fable-5`, aliases `sonnet`/`opus`/`fable`, Haiku 4.5 id | — |
 | acpx Claude advertised | `default`, `sonnet`, `claude-fable-5[1m]`, `opus[1m]`, `haiku` | bare ids may warn but still forward |
-| OpenCode `models` | includes luna/terra/sol, Claude 5 family, `grok-4.5`, `glm-5.2`, `kimi-k3`, … | list ≠ all tested with run |
+| OpenCode `models` | includes luna/terra/sol, Claude 5 family, `grok-4.5`, `glm-5.2`, `kimi-k3`, …; `grok-4.6` one-shot confirmed 2026-08-13 (`-m opencode/grok-4.6`, read-only, `--variant high` and `max`) | list ≠ all tested with run; bare `grok-4.6` unrun; tool/write/worktree unproven |
 
 Self-reported names inside model replies are **not** ground truth (Codex often mislabels).
 
@@ -67,7 +67,12 @@ Confirm with your Codex build (`codex` help / model picker). Do not assume Sol/T
 
 | Example | Notes |
 |---|---|
-| `grok-4.5` | Strong general; good Hermes lead / scout on xAI OAuth hosts |
+| `grok-4.5` | Superseded by 4.6 below; kept for provenance / older Hermes lead logs |
+| `grok-4.6` | **New 2026-08-12.** 500K context. Vendor reasoning: `low`/`medium`/`high`/`xhigh` (no `max` label). A "fast" variant is announced at ~2×; no SKU ID on a 2026-08-13 xAI OAuth `GET /v1/models` — do not add a row until an ID appears. |
+
+**Verified 2026-08-13 (one host):** xAI API chat completion (`model=grok-4.6`, 200 OK, OAuth) and `opencode run -m opencode/grok-4.6 --variant high` / `--variant max` (read-only, no tools). **Not** verified: tool use, file writes, worktree mutation, long-horizon agentic loops, bare `-m grok-4.6`. Treat as a third-family `scout`/`verify` / later `advise`/`compare` **menu candidate** — not a default/mandatory bind. Do **not** bind via `delegate_task` (child model comes from host `delegation.model`, not `models.yaml`). `review` / `review_quality` stay Claude-mainline (user policy).
+
+Metered API sticker (sourced 2026-08-20 from [xAI pricing](https://docs.x.ai/developers/pricing)): ctx <200K = $2.00 in / $0.50 cached / $6.00 out per MTok; ≥200K doubles to $4 / $1 / $12. xAI OAuth on a Hermes **lead** and an OpenCode worker are **not** the same billing surface — do not assume subscription/zero-marginal for the OpenCode path.
 
 ### Google
 
@@ -120,4 +125,5 @@ After a Claude-family writer, prefer Codex GPT tier for `review`.
 - [ ] Coding tiers still map to luna/terra/sol (or replacements)  
 - [ ] Claude 5-family still current vs newer GA names  
 - [ ] Economy candidates still meet your quality floor  
+- [ ] `grok-4.6` still advertised; fast-variant SKU still absent unless probed  
 - [ ] Bump `models.yaml` `updated_at`  
