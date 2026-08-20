@@ -5,15 +5,15 @@ Lead invokes **one** backend per hop. Capture stdout/stderr under `runs/<run_id>
 Always pass the bound **model** and **effort** (see SKILL effort policy). Translate
 logical effort into backend vocabulary:
 
-| Logical (models.yaml) | Claude CLI `--effort` | Codex `model_reasoning_effort` | Notes |
-|---|---|---|---|
-| `max` | `max` | `xhigh` (Codex max on this generation) | **Default for non-light hops** |
-| `xhigh` | `xhigh` | `xhigh` | |
-| `high` | `high` | `high` | |
-| `medium` | `medium` | `medium` | light hops only by policy |
-| `low` | `low` | `low` | light hops only |
+| Logical (models.yaml) | Claude CLI `--effort` | Codex `model_reasoning_effort` | OpenCode `--variant` | Notes |
+|---|---|---|---|---|
+| `max` | `max` | `xhigh` (Codex max on this generation) | `max` (proven 2026-08-13, grok-4.6 one-shot) | **Default for non-light hops** |
+| `xhigh` | `xhigh` | `xhigh` | unverified — **do not bind**; do not drop to `high` | Probe first; xAI native API uses `xhigh` (no `max` label) |
+| `high` | `high` | `high` | `high` (proven 2026-08-13) | |
+| `medium` | `medium` | `medium` | unproven — round **up** to `high` and log | light hops only by policy |
+| `low` | `low` | `low` | unproven — round **up** to `high` and log | light hops only |
 
-If a backend lacks a level, use the nearest **higher** supported level (never silently drop below request without logging).
+If a backend lacks a level, use the nearest **higher** supported level (never silently drop below request without logging). If no proven level exists at or above the request (OpenCode `xhigh` today), **do not bind** that effort through that backend.
 
 ## delegate_task
 
@@ -48,6 +48,34 @@ claude -p "$(cat handoff.md)" \
 
 - Levels observed: `low`, `medium`, `high`, `xhigh`, `max`
 - Prefer full model ids for CLI; aliases (`sonnet`, `fable`) OK if verified
+
+## opencode (pilot — read-only + effort proven 2026-08-13)
+
+```bash
+opencode run -m "{{model}}" --variant "{{opencode_variant}}" --format default \
+  --title "fusion-<run_id>-<route>" \
+  "$(cat handoff.md)"
+```
+
+Capture stdout/stderr under `runs/<run_id>/` yourself — this recipe does **not**
+prove reliable return-file writes.
+
+- Bind `model:` to the **CLI string** the host accepted. Verified 2026-08-13:
+  `opencode/grok-4.6`. Bare `grok-4.6` was **not** run — do not assume it works.
+- Verified: `--variant high` and `--variant max`, single-shot, no tools,
+  read-only reply (`GROK46_OPENCODE_OK` / `GROK46_MAX_OK`).
+- **Not** verified: tool calls, file writes, worktree-cwd, `--variant xhigh`,
+  long-horizon agentic sessions, return-file capture.
+- Effort: logical `max` → `--variant max` (proven). Logical `xhigh` has **no**
+  proven OpenCode mapping — do not bind; do not silently drop to `high`.
+  Logical `medium`/`low` → round up to `high` and log the gap.
+- Do **not** use for `implement`-class hops until a worktree write probe passes.
+- Do **not** use `backend: delegate_task` for Grok — the child model comes
+  from host `delegation.model`, not `models.yaml`.
+- Do **not** bind `review` / `review_quality` here (user policy: Claude-mainline).
+- A separate `grok_pilot` route does **not** feed autotune evidence for
+  `scout`. To collect a challenger, run hops as `route=scout` with a
+  per-hop bind override and log `model=opencode/grok-4.6`, `backend=opencode`.
 
 ## acpx (optional)
 

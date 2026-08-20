@@ -9,8 +9,9 @@ echo "HERMES_HOME=${HERMES_HOME:-$HOME/.hermes}"
 echo "delegate_task: unknown  # Hermes built-in when agent session has delegation; not shell-probeable"
 echo "codex:  $(have codex)"
 echo "claude: $(have claude)"
-echo "acpx:   $(have acpx)"
-echo "git:    $(have git)"
+echo "acpx:     $(have acpx)"
+echo "opencode: $(have opencode)"
+echo "git:      $(have git)"
 echo "a2a:    unknown  # enable hermes a2a toolset + peers; not shell-probeable"
 if command -v codex >/dev/null 2>&1; then
   echo "--- codex --version ---"
@@ -19,4 +20,8 @@ fi
 if command -v claude >/dev/null 2>&1; then
   echo "--- claude --version ---"
   claude --version 2>&1 | head -5 || true
+fi
+if command -v opencode >/dev/null 2>&1; then
+  echo "--- opencode --version ---"
+  opencode --version 2>&1 | head -5 || true
 fi
