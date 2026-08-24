@@ -36,4 +36,6 @@ if [[ ! -f "$DEST/routes.yaml" ]]; then
 fi
 touch "$DEST/history.jsonl"
 chmod 600 "$DEST/history.jsonl" 2>/dev/null || true
+touch "$DEST/trials.jsonl"
+chmod 600 "$DEST/trials.jsonl" 2>/dev/null || true
 echo "fusion home: $DEST"

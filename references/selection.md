@@ -56,6 +56,10 @@ If `history.jsonl` has ≥3 lines for the same route:
 - Prefer binds with higher accept rate and lower rework  
 - **Never** auto-edit `models.yaml`; only suggest a diff  
 
+New advertised IDs that have never been used in production are **not**
+history-bias candidates. They go through `scripts/trial.py` (isolated
+shadow ping → `trials.jsonl`) first. See SKILL.md → Challenger trials.
+
 ## Diversity
 
 - `review` should differ in provider/family from `produce`/`implement` when possible  

@@ -74,3 +74,12 @@ escalate:
     enabled: false
     model: ""
     budget_usd_cap: 5.0
+
+# Challenger trials — new advertised IDs get an isolated shadow ping.
+# Never writes this file. See SKILL.md → Challenger trials.
+# Default "shadow": discover + auto ping, report only. "off" is discover-only.
+trial:
+  mode: "shadow"       # "off" | "shadow"
+  max_per_run: 2
+  cooldown_days: 14
+  timeout_sec: 180

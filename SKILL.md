@@ -1,7 +1,7 @@
 ---
 name: fusion-harness
 description: "Use when multi-model fusion (lead/workers, visible routing)."
-version: 1.2.0
+version: 1.3.0
 author: Hermes
 license: MIT
 metadata:
@@ -51,7 +51,11 @@ $HERMES_HOME/fusion/          # default: ~/.hermes/fusion/
   models.yaml                 # USER owns — frontier follow lives here
   routes.yaml                 # optional logical-route overrides
   backends.yaml               # optional probe cache / custom commands
-  history.jsonl               # append-only evidence
+  history.jsonl               # append-only production-hop evidence
+  advertised_seen.json        # last advertised-ID snapshot (trial discover)
+  trial_queue.json            # new IDs waiting for a shadow ping
+  trials.jsonl                # shadow-trial evidence (NOT mixed into history)
+  trials/<id>/                # isolated ping artifacts
   runs/<run_id>/              # handoffs, returns, optional workspace pointer
 ```
 
@@ -209,6 +213,58 @@ See `references/backends.md`.
 Do not special-case product names as mandatory escalate targets in the skill
 core; put them in `models.yaml` → `escalate:`.
 
+## Challenger trials (new-model shadow)
+
+`history.jsonl` only records production hops. New advertised IDs therefore
+never become routing evidence unless something **tries them first**. That
+loop is `scripts/trial.py`. It does **not** write `models.yaml` and it does
+**not** append `history.jsonl`.
+
+```yaml
+trial:
+  mode: "shadow"       # "off" | "shadow"  (missing block ⇒ shadow)
+  max_per_run: 2
+  cooldown_days: 14
+  timeout_sec: 180
+```
+
+The block is read by `trial.py` (unattended watch). `mode: "off"` disables
+auto pings even if `watch --auto` is passed; discover/queue still run.
+CLI flags override the numeric knobs when they differ from the script
+defaults. The script also reads route binds so the watch loop can run
+without a lead.
+
+Loop (cron or session start):
+
+1. **Discover**: `python3 scripts/trial.py discover --probe --write`  
+   Collect advertised IDs from installed CLIs (currently `opencode models`;
+   `--advertised FILE` injects a snapshot for tests / offline hosts).
+   Compare against `models.yaml` binds + `advertised_seen.json`.
+2. **First snapshot seeds**: if `advertised_seen.json` is empty, write the
+   current universe and emit `new: []`. A host advertising 50 IDs must not
+   fire 50 hops on day one.
+3. **Queue**: later IDs that are neither bound nor previously seen go to
+   `trial_queue.json` (already-trialed IDs inside `cooldown_days` are skipped).
+4. **Shadow ping** (`watch --auto`): pop up to `max_per_run` queued IDs.
+   Each runs an isolated cheap fixture (`Reply with exactly: PONG`) via the
+   advertising backend, cwd = `$HERMES_HOME/fusion/trials/<trial_id>/`.
+   Champion binds stay put. Outcome is `ok` / `failed` / `timeout` /
+   `skipped` — not a production `accepted`.
+5. **Report**: stdout (human) or `--json`. `watch --quiet-if-empty` prints
+   nothing when there is no seed and no new/ran activity — cron-silent.
+6. **Apply**: never. Bind a challenger by hand (or via whatever approval
+   loop the host already uses) after reviewing `trials.jsonl`.
+
+```bash
+python3 scripts/trial.py discover --probe --write
+python3 scripts/trial.py watch --probe --auto --quiet-if-empty
+python3 scripts/trial.py run --model <id> --backend opencode     # one-shot
+python3 scripts/trial.py report --last 20
+```
+
+`--runner 'echo PONG'` (or `run … -- echo PONG`) substitutes a local
+command so tests and dry hosts never call a paid CLI.
+
 ## Report format (to user)
 
 ```markdown
@@ -228,6 +284,9 @@ location; do not assume a single user's home layout beyond `$HERMES_HOME`):
 bash scripts/probe_backends.sh
 bash scripts/fusion_init.sh
 python3 scripts/fusion_log.py summary --last 20
+python3 scripts/trial.py discover --probe --write
+python3 scripts/trial.py watch --probe --auto --quiet-if-empty
+python3 scripts/trial.py report --last 20
 bash scripts/worktree_prepare.sh /abs/repo <run_id>
 bash scripts/worktree_cleanup.sh <run_id>
 bash scripts/smoke_test.sh
@@ -248,6 +307,10 @@ requires its recorded worktree and repo markers.
 5. Dropping effort to "save money" on non-light hops — prefer cheaper model or fewer hops instead.
 6. Skipping history lines — evidence base never learns.
 7. Parallel writers on one mutable workspace — serialize or isolate.
+8. Mixing shadow trials into `history.jsonl` — that lets a ping impersonate
+   a production accept. Trials stay in `trials.jsonl`.
+9. Treating the first `discover --write` as 50 live hops — an empty
+   `advertised_seen.json` is a baseline seed (`new: []`), not a bake-off.
 
 ## Verification Checklist
 
@@ -258,6 +321,7 @@ requires its recorded worktree and repo markers.
 - [ ] User saw route/model/backend table
 - [ ] Workspace isolation cleaned up or handed off (if used)
 - [ ] Escalations logged with budget when applicable
+- [ ] New-model trials (if any) landed in `trials.jsonl`, not `history.jsonl` / `models.yaml`
 
 ## References
 
