@@ -73,6 +73,8 @@ scripts/
   fusion_log.py
   trial.py               # new-model discover + isolated shadow pings
   trial_watch.sh         # cron/watchdog entry (quiet if nothing new)
+  cli_watch.py           # worker CLI version report / official updaters
+  cli_watch.sh           # cron wrapper (apply known-latest patches)
   probe_backends.sh
   worktree_prepare.sh
   worktree_cleanup.sh

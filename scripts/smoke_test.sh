@@ -207,6 +207,38 @@ echo "$wout3" | grep -q '"mode": "off"' || fail "mode off not reported: $wout3"
 echo "$wout3" | grep -q '"auto": false' || fail "mode off should disable auto: $wout3"
 echo "$wout3" | grep -q '"ran": \[\]' || fail "mode off must not ping: $wout3"
 echo "$wout3" | grep -q 'brand-new-4' || fail "mode off should still discover: $wout3"
+# new backend first-seen seeds, does not flood the queue
+cat >"$HERMES_HOME/fusion/adv_cursor1.json" <<'EOF'
+[
+  {"id": "opencode/gpt-5.6-luna", "backend": "opencode"},
+  {"id": "opencode/brand-new-4", "backend": "opencode"},
+  {"id": "claude-sonnet-5", "backend": "claude"},
+  {"id": "composer-2.5", "backend": "cursor"},
+  {"id": "cursor-grok-4.6-high", "backend": "cursor"}
+]
+EOF
+disc_c1="$(python3 "$ROOT/scripts/trial.py" discover --advertised "$HERMES_HOME/fusion/adv_cursor1.json" --write)"
+echo "$disc_c1" | grep -q '"id": "composer-2.5"' || fail "cursor ids should be classified: $disc_c1"
+echo "$disc_c1" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("new")==[], d; ids={x["id"] for x in d.get("backend_seeded") or []}; assert ids=={"composer-2.5","cursor-grok-4.6-high"}, ids'
+cat >"$HERMES_HOME/fusion/adv_cursor2.json" <<'EOF'
+[
+  {"id": "opencode/gpt-5.6-luna", "backend": "opencode"},
+  {"id": "composer-2.5", "backend": "cursor"},
+  {"id": "cursor-grok-4.6-high", "backend": "cursor"},
+  {"id": "composer-3.0", "backend": "cursor"}
+]
+EOF
+disc_c2="$(python3 "$ROOT/scripts/trial.py" discover --advertised "$HERMES_HOME/fusion/adv_cursor2.json" --write)"
+echo "$disc_c2" | python3 -c 'import json,sys; d=json.load(sys.stdin); ids={x["id"] for x in d.get("new") or []}; assert ids=={"composer-3.0"}, d'
+python3 -m py_compile "$ROOT/scripts/cli_watch.py" || fail "cli_watch.py syntax"
+ROOT_PY="$ROOT" python3 - <<'PY' || fail "parse_cursor_models should drop auto"
+import sys, os
+sys.path.insert(0, os.environ["ROOT_PY"] + "/scripts")
+from trial import parse_cursor_models
+assert parse_cursor_models('["auto", "composer-2.5"]') == ["composer-2.5"]
+assert parse_cursor_models('{"models":[{"id":"auto"},{"id":"composer-2.5"}]}') == ["composer-2.5"]
+assert "auto" not in parse_cursor_models("auto - Auto (default)\ncomposer-2.5 - Composer 2.5")
+PY
 pass "trial"
 
 echo "ALL SMOKE PASSED"

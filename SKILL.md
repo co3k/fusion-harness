@@ -183,7 +183,7 @@ Probe: `scripts/probe_backends.sh`. Use first backend that satisfies route
 | Backend | Typical role |
 |---|---|
 | `delegate_task` | in-Hermes worker; scout/verify/synthesize |
-| `codex` / `claude` / other CLIs | external agent runtimes if present |
+| `codex` / `claude` / `opencode` / `cursor` | external agent runtimes if present |
 | `acpx` | ACP bridge if present |
 | `a2a` | protocol peers if toolset enabled |
 | `terminal` | user-defined command template |
@@ -237,12 +237,14 @@ without a lead.
 Loop (cron or session start):
 
 1. **Discover**: `python3 scripts/trial.py discover --probe --write`  
-   Collect advertised IDs from installed CLIs (currently `opencode models`;
+   Collect advertised IDs from installed CLIs (`opencode models`, and
+   `cursor-agent --list-models` when that CLI is authenticated;
    `--advertised FILE` injects a snapshot for tests / offline hosts).
    Compare against `models.yaml` binds + `advertised_seen.json`.
 2. **First snapshot seeds**: if `advertised_seen.json` is empty, write the
    current universe and emit `new: []`. A host advertising 50 IDs must not
-   fire 50 hops on day one.
+   fire 50 hops on day one. **A newly seen backend is also a seed** — adding
+   Cursor later must not enqueue its whole catalog.
 3. **Queue**: later IDs that are neither bound nor previously seen go to
    `trial_queue.json` (already-trialed IDs inside `cooldown_days` are skipped).
 4. **Shadow ping** (`watch --auto`): pop up to `max_per_run` queued IDs.
@@ -259,7 +261,10 @@ Loop (cron or session start):
 python3 scripts/trial.py discover --probe --write
 python3 scripts/trial.py watch --probe --auto --quiet-if-empty
 python3 scripts/trial.py run --model <id> --backend opencode     # one-shot
+python3 scripts/trial.py run --model <id> --backend cursor
 python3 scripts/trial.py report --last 20
+python3 scripts/cli_watch.py                    # worker CLI versions
+python3 scripts/cli_watch.py --apply            # official updaters only
 ```
 
 `--runner 'echo PONG'` (or `run … -- echo PONG`) substitutes a local
@@ -287,6 +292,7 @@ python3 scripts/fusion_log.py summary --last 20
 python3 scripts/trial.py discover --probe --write
 python3 scripts/trial.py watch --probe --auto --quiet-if-empty
 python3 scripts/trial.py report --last 20
+python3 scripts/cli_watch.py
 bash scripts/worktree_prepare.sh /abs/repo <run_id>
 bash scripts/worktree_cleanup.sh <run_id>
 bash scripts/smoke_test.sh
@@ -311,6 +317,10 @@ requires its recorded worktree and repo markers.
    a production accept. Trials stay in `trials.jsonl`.
 9. Treating the first `discover --write` as 50 live hops — an empty
    `advertised_seen.json` is a baseline seed (`new: []`), not a bake-off.
+10. Adding a new CLI catalog (Cursor, …) without a per-backend seed —
+    that floods the queue. First time a backend appears is a seed.
+11. Treating the same advertised ID on Cursor vs Claude/Codex as the same
+    candidate — different harness, separate evidence.
 
 ## Verification Checklist
 

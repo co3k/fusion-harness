@@ -12,10 +12,13 @@ This script never writes models.yaml.
 
 First discover with an empty seen-snapshot seeds the universe and
 emits new=[] so a host with 50 advertised IDs does not fire 50 hops.
+The first time a new backend appears (e.g. Cursor after OpenCode)
+is also a seed — it is recorded, not flooded into the queue.
 Later discovers queue only IDs that were not in that snapshot (and
 are not already bound). watch pops up to --max-per-run from the queue.
 
-Deterministic, stdlib-only.
+Probes: `opencode models` and `cursor-agent --list-models` (empty if
+unauthenticated). Deterministic, stdlib-only.
 """
 from __future__ import annotations
 
@@ -210,33 +213,117 @@ def load_advertised(path: Path) -> list[dict]:
     return items
 
 
-def probe_advertised() -> list[dict]:
-    items: list[dict] = []
-    if shutil.which("opencode"):
+def _run_capture(argv: list[str], timeout: int = 60) -> subprocess.CompletedProcess | None:
+    try:
+        return subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def cursor_bin() -> str | None:
+    return shutil.which("cursor-agent") or shutil.which("agent")
+
+
+def parse_cursor_models(text: str) -> list[str]:
+    """Parse `agent --list-models` / `agent models` text or JSON."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    skip_ids = {"auto", "model", "models", "name", "id", "available"}
+
+    def _keep(token: str) -> bool:
+        token = (token or "").strip()
+        return bool(token) and token.lower() not in skip_ids
+
+    if text.lstrip()[:1] in "{[":
         try:
-            proc = subprocess.run(
-                ["opencode", "models"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            proc = None
-        if proc and proc.returncode == 0:
-            for line in proc.stdout.splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                items.append(
-                    {
-                        "advertised_id": line,
-                        "id": bare_id(line),
-                        "backend": "opencode",
-                        "source": "opencode models",
-                    }
-                )
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            data = None
+        ids: list[str] = []
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, str):
+                    ids.append(item.strip())
+                elif isinstance(item, dict):
+                    for key in ("id", "modelId", "model", "name"):
+                        if item.get(key):
+                            ids.append(str(item[key]).strip())
+                            break
+            return list(dict.fromkeys(x for x in ids if _keep(x)))
+        if isinstance(data, dict):
+            for key in ("models", "data", "items"):
+                if isinstance(data.get(key), list):
+                    return parse_cursor_models(json.dumps(data[key]))
+    ids = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.lower().startswith(("error", "tip:", "usage:")):
+            continue
+        if line.lower() in {"available models", "available models:"}:
+            continue
+        token = line.split(" - ", 1)[0].split()[0].strip(" ,;|")
+        if not _keep(token):
+            continue
+        if re.match(r"^[A-Za-z0-9][A-Za-z0-9._:+-]*$", token):
+            ids.append(token)
+    return list(dict.fromkeys(ids))
+
+
+def probe_opencode() -> list[dict]:
+    if not shutil.which("opencode"):
+        return []
+    proc = _run_capture(["opencode", "models"])
+    if not proc or proc.returncode != 0:
+        return []
+    items: list[dict] = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        items.append(
+            {
+                "advertised_id": line,
+                "id": bare_id(line),
+                "backend": "opencode",
+                "source": "opencode models",
+            }
+        )
     return items
+
+
+def probe_cursor() -> list[dict]:
+    exe = cursor_bin()
+    if not exe:
+        return []
+    stdout = ""
+    for argv in ([exe, "--list-models"], [exe, "models"]):
+        proc = _run_capture(argv, timeout=60)
+        if not proc or proc.returncode != 0:
+            continue
+        stdout = proc.stdout or ""
+        if stdout.strip():
+            break
+    ids = parse_cursor_models(stdout)
+    return [
+        {
+            "advertised_id": mid,
+            "id": mid,
+            "backend": "cursor",
+            "source": "cursor-agent --list-models",
+        }
+        for mid in ids
+    ]
+
+
+def probe_advertised() -> list[dict]:
+    return probe_opencode() + probe_cursor()
 
 
 def seen_path() -> Path:
@@ -251,21 +338,43 @@ def trials_path() -> Path:
     return fusion_home() / "trials.jsonl"
 
 
+def infer_seeded_backends(ids: list[str]) -> list[str]:
+    found: set[str] = set()
+    for aid in ids:
+        if aid.startswith("opencode/") or aid.startswith("opencode-go/"):
+            found.add("opencode")
+        elif aid.startswith("cursor/") or aid.startswith("cursor-agent/"):
+            found.add("cursor")
+    return sorted(found)
+
+
 def load_seen() -> dict:
     data = _read_json(seen_path(), {})
     ids = data.get("ids") if isinstance(data, dict) else []
     if not isinstance(ids, list):
         ids = []
+    ids = [str(x) for x in ids]
+    seeded = data.get("seeded_backends") if isinstance(data, dict) else []
+    if not isinstance(seeded, list) or not seeded:
+        seeded = infer_seeded_backends(ids)
     return {
         "updated_at": data.get("updated_at") if isinstance(data, dict) else None,
-        "ids": [str(x) for x in ids],
-        "bare": {bare_id(str(x)) for x in ids},
+        "ids": ids,
+        "bare": {bare_id(x) for x in ids},
+        "seeded_backends": [str(x) for x in seeded],
     }
 
 
-def save_seen(advertised_ids: list[str], previous: list[str] | None = None) -> None:
+def save_seen(
+    advertised_ids: list[str],
+    previous: list[str] | None = None,
+    seeded_backends: list[str] | None = None,
+) -> None:
     merged = list(dict.fromkeys((previous or []) + advertised_ids))
-    _write_json(seen_path(), {"updated_at": _iso(), "ids": merged})
+    payload: dict = {"updated_at": _iso(), "ids": merged}
+    if seeded_backends is not None:
+        payload["seeded_backends"] = sorted(set(seeded_backends))
+    _write_json(seen_path(), payload)
 
 
 def load_queue() -> list[dict]:
@@ -280,13 +389,15 @@ def save_queue(items: list[dict]) -> None:
     _write_json(queue_path(), {"updated_at": _iso(), "items": items})
 
 
-def recently_trialed(model: str, cooldown_days: int) -> bool:
+def recently_trialed(model: str, cooldown_days: int, backend: str = "") -> bool:
     if cooldown_days <= 0:
         return False
     cutoff = _utcnow().timestamp() - cooldown_days * 86400
     target = bare_id(model)
     for row in _read_jsonl(trials_path()):
         if bare_id(str(row.get("model") or "")) != target:
+            continue
+        if backend and str(row.get("backend") or "") not in {"", "terminal", backend}:
             continue
         ts = str(row.get("ts") or "")
         try:
@@ -341,25 +452,40 @@ def cmd_discover(args: argparse.Namespace) -> int:
     bound = load_bound()
     seen = load_seen()
     seeded = False
+    backend_seeded: list[dict] = []
+    advertised_backends = {a["backend"] for a in advertised if a.get("backend")}
+    known_backends = set(seen.get("seeded_backends") or [])
     if not seen["ids"]:
         # First snapshot: remember the universe, do not flood trials.
         if args.write:
-            save_seen([a["advertised_id"] for a in advertised])
+            save_seen(
+                [a["advertised_id"] for a in advertised],
+                seeded_backends=sorted(advertised_backends),
+            )
         classified = classify(advertised, bound, {"bare": {a["id"] for a in advertised}})
         classified["new"] = []
         seeded = True
     else:
         classified = classify(advertised, bound, seen)
+        new_backends = advertised_backends - known_backends
+        if new_backends:
+            backend_seeded = [n for n in classified["new"] if n["backend"] in new_backends]
+            classified["new"] = [n for n in classified["new"] if n["backend"] not in new_backends]
         if args.write:
-            save_seen([a["advertised_id"] for a in advertised], previous=seen["ids"])
+            save_seen(
+                [a["advertised_id"] for a in advertised],
+                previous=seen["ids"],
+                seeded_backends=sorted(known_backends | advertised_backends),
+            )
             if classified["new"]:
                 queue = load_queue()
-                queued_ids = {q["id"] for q in queue}
+                queued_keys = {(q.get("backend"), q["id"]) for q in queue}
                 now = _iso()
                 for item in classified["new"]:
-                    if item["id"] in queued_ids:
+                    key = (item["backend"], item["id"])
+                    if key in queued_keys:
                         continue
-                    if recently_trialed(item["id"], args.cooldown_days):
+                    if recently_trialed(item["id"], args.cooldown_days, item.get("backend") or ""):
                         continue
                     queue.append(
                         {
@@ -369,9 +495,10 @@ def cmd_discover(args: argparse.Namespace) -> int:
                             "first_seen": now,
                         }
                     )
-                    queued_ids.add(item["id"])
+                    queued_keys.add(key)
                 save_queue(queue)
 
+    classified["backend_seeded"] = backend_seeded
     out = {
         "generated_at": _iso(),
         "seeded": seeded,
@@ -403,6 +530,21 @@ def _default_argv(backend: str, model: str, advertised_id: str) -> list[str]:
             model,
             FIXTURE_PROMPT,
         ]
+    if backend in {"cursor", "cursor-agent", "agent"}:
+        exe = cursor_bin()
+        if exe:
+            return [
+                exe,
+                "-p",
+                "--trust",
+                "--mode",
+                "ask",
+                "--model",
+                target,
+                "--output-format",
+                "text",
+                FIXTURE_PROMPT,
+            ]
     return []
 
 
@@ -512,7 +654,7 @@ def _pop_queue(max_n: int, cooldown_days: int) -> tuple[list[dict], list[dict]]:
         if len(picked) >= max_n:
             kept.append(item)
             continue
-        if recently_trialed(str(item.get("id") or ""), cooldown_days):
+        if recently_trialed(str(item.get("id") or ""), cooldown_days, str(item.get("backend") or "")):
             continue
         picked.append(item)
     save_queue(kept)
@@ -582,6 +724,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
         "seeded": bool(discover.get("seeded")),
         "advertised": discover.get("advertised", 0),
         "new": discover.get("new", []),
+        "backend_seeded": discover.get("backend_seeded", []),
         "already_bound": discover.get("already_bound", []),
         "mode": cfg["mode"],
         "auto": auto,
@@ -600,7 +743,13 @@ def cmd_watch(args: argparse.Namespace) -> int:
         "history_written": False,
     }
 
-    quiet = args.quiet_if_empty and not report["seeded"] and not report["new"] and not report["ran"]
+    quiet = (
+        args.quiet_if_empty
+        and not report["seeded"]
+        and not report["new"]
+        and not report.get("backend_seeded")
+        and not report["ran"]
+    )
     if quiet:
         return 0
     if args.json:
@@ -621,9 +770,11 @@ def _format_watch(report: dict) -> str:
         lines.append("- models.yaml: unchanged")
         return "\n".join(lines)
     n_new = len(report.get("new") or [])
+    n_backend_seeded = len(report.get("backend_seeded") or [])
     lines.append(
         f"- advertised: {report.get('advertised', 0)} "
-        f"(new: {n_new}, bound: {len(report.get('already_bound') or [])})"
+        f"(new: {n_new}, bound: {len(report.get('already_bound') or [])}"
+        f"{f', backend_seeded: {n_backend_seeded}' if n_backend_seeded else ''})"
     )
     if report.get("ran"):
         for r in report["ran"]:
@@ -659,7 +810,7 @@ def main() -> int:
 
     d = sp.add_parser("discover", help="diff advertised IDs against binds + seen snapshot")
     d.add_argument("--advertised", default=None, help="JSON file of advertised IDs")
-    d.add_argument("--probe", action="store_true", help="probe installed CLIs (opencode models)")
+    d.add_argument("--probe", action="store_true", help="probe installed CLIs (opencode models, cursor-agent --list-models)")
     d.add_argument("--write", action="store_true", help="update seen snapshot + trial queue")
     d.add_argument("--cooldown-days", type=int, default=DEFAULT_COOLDOWN_DAYS, dest="cooldown_days")
     d.set_defaults(func=cmd_discover)

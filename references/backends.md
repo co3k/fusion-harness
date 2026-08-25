@@ -49,6 +49,29 @@ claude -p "$(cat handoff.md)" \
 - Levels observed: `low`, `medium`, `high`, `xhigh`, `max`
 - Prefer full model ids for CLI; aliases (`sonnet`, `fable`) OK if verified
 
+## cursor (Cursor Agent CLI)
+
+`agent` and `cursor-agent` are the same binary. Requires `agent login` or
+`CURSOR_API_KEY` / `CURSOR_AUTH_TOKEN`. Unauthenticated probes return empty
+(not an error).
+
+```bash
+agent -p --trust --mode ask \
+  --model "{{model}}" \
+  --output-format text \
+  "$(cat handoff.md)"
+```
+
+- Catalog: `agent --list-models` / `agent models` (`id - Display Name`)
+- Skip the `auto` row — that is Cursor's own router, not a bindable ID
+- Effort often lives **inside the model id** (`…-high`, `…-xhigh`, `…-fast`)
+  or as a parameterized override:
+  `--model 'claude-opus-4-8[context=1m,effort=high,fast=false]'`
+- `--mode ask` is read-only (good for shadow pings). Produce hops should
+  omit `--mode ask` so the agent can edit
+- Same weights via Cursor vs Claude CLI vs Codex are **not** equivalent
+  candidates — log `backend: cursor`
+
 ## acpx (optional)
 
 ```bash
