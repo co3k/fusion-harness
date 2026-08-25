@@ -38,7 +38,10 @@ User-owned config lives under `$HERMES_HOME/fusion/` (not in this repo):
 |------|---------|
 | `models.yaml` | route → model / backend / **effort** |
 | `routes.yaml` | optional logical route overrides |
-| `history.jsonl` | evidence log |
+| `history.jsonl` | production-hop evidence |
+| `advertised_seen.json` | advertised-ID snapshot (`trial.py discover`) |
+| `trial_queue.json` | new IDs waiting for a shadow ping |
+| `trials.jsonl` | shadow-trial evidence (never mixed into history) |
 | `runs/<id>/` | handoffs and returns |
 
 ## Core ideas
@@ -50,6 +53,7 @@ User-owned config lives under `$HERMES_HOME/fusion/` (not in this repo):
 | Route ≠ model ≠ effort | Bind all three in `models.yaml` |
 | Effort default | **max** (Codex: `xhigh`) except clearly light hops |
 | Evidence | Every hop logs route/model/backend/effort/outcome |
+| Challenger trial | New advertised IDs are shadow-pinged automatically; `models.yaml` stays human-gated |
 
 Domain-agnostic: coding, research, writing, advice prep, comparisons — **no
 built-in topic denylist**.
@@ -67,6 +71,10 @@ references/
 scripts/
   fusion_init.sh
   fusion_log.py
+  trial.py               # new-model discover + isolated shadow pings
+  trial_watch.sh         # cron/watchdog entry (quiet if nothing new)
+  cli_watch.py           # worker CLI version report / official updaters
+  cli_watch.sh           # cron wrapper (apply known-latest patches)
   probe_backends.sh
   worktree_prepare.sh
   worktree_cleanup.sh
